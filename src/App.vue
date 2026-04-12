@@ -1,36 +1,24 @@
 <template>
   <main class="app-container">
-    <h1>Météo des Plages 🏖️</h1>
+    <h1>Météo des Plages</h1>
 
-    <div class="search-section">
-      <input v-model="searchQuery" @keyup.enter="searchBeaches" placeholder="Ville (ex: Marseille)..." />
-      <button @click="searchBeaches" :disabled="isLoading">Trouver</button>
+    <div v-show="!showDetails">
+      <div class="search-section">
+        <input v-model="searchQuery" @keyup.enter="searchBeaches" placeholder="Ville (ex: Marseille)..." />
+        <button @click="searchBeaches" :disabled="isLoading">Trouver</button>
+      </div>
+
+      <div ref="mapContainer" class="map-view"></div>
+      <div v-if="errorMessage" class="error">{{ errorMessage }}</div>
     </div>
 
-    <div ref="mapContainer" class="map-view"></div>
-
-    <div v-if="errorMessage" class="error">{{ errorMessage }}</div>
-
-    <div class="content-grid">
-      <section v-if="beaches.length > 0" class="beach-list">
-        <h2>Plages aux alentours</h2>
-        <ul>
-          <li v-for="beach in beaches" :key="beach.id" @click="showWeather(beach)">
-            {{ beach.tags.name || 'Plage anonyme' }} <span>➔</span>
-          </li>
-        </ul>
-      </section>
-
-      <section v-if="selectedWeather" class="weather-detail">
-        <h2>Météo à {{ selectedWeather.name }}</h2>
-        <div class="weather-card">
-          <p class="temp">{{ selectedWeather.data.temp2m }}°C</p>
-          <p>Pluie : {{ selectedWeather.data.proprobailite }}%</p>
-          <p>Vent : {{ selectedWeather.data.wind10m }} km/h</p>
-          <p class="weather-info">Code météo : {{ selectedWeather.data.weather }}</p>
-        </div>
-      </section>
-    </div>
+    <WeeklyForecast
+      v-if="showDetails"
+      :lat="selectedBeachForDetails.lat"
+      :lon="selectedBeachForDetails.lon"
+      :beachName="selectedBeachForDetails.tags.name || 'Plage anonyme'"
+      @close="closeDetails"
+    />
   </main>
 </template>
 
@@ -38,7 +26,8 @@
 import { ref, onMounted, nextTick } from 'vue';
 import axios from 'axios';
 import L from 'leaflet';
-import 'leaflet/dist/leaflet.css'; // Import important pour l'affichage de la carte
+import 'leaflet/dist/leaflet.css';
+import WeeklyForecast from './components/WeeklyForecast.vue';
 
 const METEO_TOKEN = import.meta.env.VITE_METEO_TOKEN;
 
@@ -47,6 +36,8 @@ const beaches = ref([]);
 const selectedWeather = ref(null);
 const isLoading = ref(false);
 const errorMessage = ref('');
+const showDetails = ref(false);
+const selectedBeachForDetails = ref(null);
 
 // --- LOGIQUE DE LA CARTE ---
 const mapContainer = ref(null);
@@ -101,10 +92,11 @@ const updateMap = (lat, lon, beachList) => {
       const weatherContainer = document.getElementById(`weather-${beach.id}`);
       const detailButton = document.getElementById(`btn-${beach.id}`);
 
-      // On prépare le clic sur le bouton pour la future page (Étape 2)
+      // Quand on clique sur le bouton "Prévisions 7 jours"
       detailButton.onclick = () => {
-        console.log("Bientôt, on ira sur la page de détail pour :", beachName);
-        // Nous mettrons le code de redirection ici à l'étape 2 !
+        selectedBeachForDetails.value = beach; // On mémorise la plage cliquée
+        showDetails.value = true; // On change de "page"
+        window.scrollTo(0, 0); // On remonte tout en haut
       };
 
       try {
@@ -178,6 +170,19 @@ const showWeather = async (beach) => {
     alert("Erreur météo.");
   }
 };
+
+const closeDetails = () => {
+  showDetails.value = false;
+
+  // On attend que Vue affiche à nouveau la div de la carte
+  nextTick(() => {
+    if (map) {
+      // Cette commande force Leaflet à se recalculer correctement
+      map.invalidateSize();
+    }
+  });
+};
+
 </script>
 
 <style>
