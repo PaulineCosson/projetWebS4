@@ -11,7 +11,26 @@
 
     <div v-if="errorMessage" class="error">{{ errorMessage }}</div>
 
-    <div class="content-grid"> ... </div>
+    <div class="content-grid">
+      <section v-if="beaches.length > 0" class="beach-list">
+        <h2>Plages aux alentours</h2>
+        <ul>
+          <li v-for="beach in beaches" :key="beach.id" @click="showWeather(beach)">
+            {{ beach.tags.name || 'Plage anonyme' }} <span>➔</span>
+          </li>
+        </ul>
+      </section>
+
+      <section v-if="selectedWeather" class="weather-detail">
+        <h2>Météo à {{ selectedWeather.name }}</h2>
+        <div class="weather-card">
+          <p class="temp">{{ selectedWeather.data.temp2m }}°C</p>
+          <p>Pluie : {{ selectedWeather.data.proprobailite }}%</p>
+          <p>Vent : {{ selectedWeather.data.wind10m }} km/h</p>
+          <p class="weather-info">Code météo : {{ selectedWeather.data.weather }}</p>
+        </div>
+      </section>
+    </div>
   </main>
 </template>
 
@@ -43,23 +62,71 @@ const initMap = () => {
   markersLayer = L.layerGroup().addTo(map);
 };
 
+// Fonction utilitaire pour traduire les codes de Météo-Concept
+const getWeatherEmoji = (code) => {
+  if (code === 0) return '☀️ Soleil';
+  if (code >= 1 && code <= 5) return '⛅ Éclaircies / Nuages';
+  if (code >= 10 && code <= 16) return '🌧️ Pluie';
+  if (code >= 20 && code <= 22) return '❄️ Neige';
+  if (code >= 100 && code <= 142) return '⛈️ Orage';
+  return '☁️ Couvert'; // Par défaut
+};
+
 const updateMap = (lat, lon, beachList) => {
   if (!map) initMap();
-
-  // On vide les anciens marqueurs
   markersLayer.clearLayers();
-
-  // On centre la carte sur la ville recherchée
   map.setView([lat, lon], 11);
 
-  // On ajoute un marqueur pour chaque plage
   beachList.forEach(beach => {
-    const marker = L.marker([beach.lat, beach.lon])
-      .addTo(markersLayer)
-      .bindPopup(beach.tags.name || "Plage");
+    const beachName = beach.tags.name || "Plage sans nom";
+    const marker = L.marker([beach.lat, beach.lon]).addTo(markersLayer);
 
-    // Si on clique sur le marqueur, on lance la météo
-    marker.on('click', () => showWeather(beach));
+    // 1. On prépare le HTML de base du popup (avec un "Chargement...")
+    const popupHtml = `
+      <div style="text-align: center; min-width: 150px;">
+        <strong style="display:block; margin-bottom:8px; font-size:1.1em;">${beachName}</strong>
+        <div id="weather-${beach.id}" style="margin-bottom: 10px;">
+          ⏳ <i>Chargement météo...</i>
+        </div>
+        <button id="btn-${beach.id}" style="background:#007bff; color:white; border:none; padding:8px 12px; border-radius:4px; cursor:pointer; width: 100%;">
+          Prévisions 7 jours ➔
+        </button>
+      </div>
+    `;
+
+    marker.bindPopup(popupHtml);
+
+    // 2. Événement : Quand on ouvre le popup en cliquant sur le marqueur
+    marker.on('popupopen', async () => {
+      const weatherContainer = document.getElementById(`weather-${beach.id}`);
+      const detailButton = document.getElementById(`btn-${beach.id}`);
+
+      // On prépare le clic sur le bouton pour la future page (Étape 2)
+      detailButton.onclick = () => {
+        console.log("Bientôt, on ira sur la page de détail pour :", beachName);
+        // Nous mettrons le code de redirection ici à l'étape 2 !
+      };
+
+      try {
+        // On fait l'appel API uniquement pour la plage cliquée
+        const res = await axios.get(`https://api.meteo-concept.com/api/forecast/daily/0`, {
+          params: { token: METEO_TOKEN, latlng: `${beach.lat},${beach.lon}` }
+        });
+
+        const forecast = res.data.forecast;
+        const condition = getWeatherEmoji(forecast.weather);
+
+        // On remplace le texte de chargement par les vraies données !
+        weatherContainer.innerHTML = `
+          <div style="font-weight:bold; color:#007bff; font-size:1.2em; margin-bottom:5px;">${condition}</div>
+          🌡️ Température : <b>${forecast.temp2m}°C</b><br>
+          💨 Vent : <b>${forecast.wind10m} km/h</b><br>
+          ☔ Prob. pluie : <b>${forecast.proprobailite}%</b>
+        `;
+      } catch (error) {
+        weatherContainer.innerHTML = `<span style="color:red;">❌ Météo indisponible</span>`;
+      }
+    });
   });
 };
 
