@@ -2,32 +2,52 @@
   <main class="app-container">
     <h1>Météo des Plages</h1>
 
-    <div v-show="!showDetails">
+    <nav class="main-nav">
+      <button :class="{active: currentView === 'map'}" @click="currentView = 'map'">Carte</button>
+      <button :class="{active: currentView === 'favorites'}" @click="currentView = 'favorites'">
+        Favoris ({{ favorites.length }})
+      </button>
+    </nav>
+
+    <div v-show="currentView === 'map'">
       <div class="search-section">
         <input v-model="searchQuery" @keyup.enter="searchBeaches" placeholder="Ville (ex: Marseille)..." />
         <button @click="searchBeaches" :disabled="isLoading">Trouver</button>
       </div>
 
       <div ref="mapContainer" class="map-view"></div>
+
       <div v-if="errorMessage" class="error">{{ errorMessage }}</div>
     </div>
 
+    <FavoritesList
+      v-if="currentView === 'favorites'"
+      :favorites="favorites"
+      @go-map="currentView = 'map'"
+      @remove="toggleFavorite"
+      @view-details="(beach) => {
+        selectedBeachForDetails = beach;
+        currentView = 'details';
+      }"
+    />
+
     <WeeklyForecast
-      v-if="showDetails"
-      :lat="selectedBeachForDetails.lat"
-      :lon="selectedBeachForDetails.lon"
-      :beachName="selectedBeachForDetails.tags.name || 'Plage anonyme'"
+      v-if="currentView === 'details'"
+      :beach="selectedBeachForDetails"
+      :isFavorite="favorites.some(f => f.id === selectedBeachForDetails.id)"
+      @toggle-favorite="toggleFavorite(selectedBeachForDetails)"
       @close="closeDetails"
     />
   </main>
 </template>
 
 <script setup>
-import { ref, onMounted, nextTick } from 'vue';
+import { ref, onMounted, watch, nextTick } from 'vue';
 import axios from 'axios';
 import L from 'leaflet';
-import 'leaflet/dist/leaflet.css';
 import WeeklyForecast from './components/WeeklyForecast.vue';
+import FavoritesList from './components/FavoritesList.vue';
+import 'leaflet/dist/leaflet.css';
 
 const METEO_TOKEN = import.meta.env.VITE_METEO_TOKEN;
 
@@ -38,6 +58,8 @@ const isLoading = ref(false);
 const errorMessage = ref('');
 const showDetails = ref(false);
 const selectedBeachForDetails = ref(null);
+const currentView = ref('map');
+const favorites = ref(JSON.parse(localStorage.getItem('beach-favorites')) || []);
 
 // --- LOGIQUE DE LA CARTE ---
 const mapContainer = ref(null);
@@ -72,15 +94,20 @@ const updateMap = (lat, lon, beachList) => {
     const beachName = beach.tags.name || "Plage sans nom";
     const marker = L.marker([beach.lat, beach.lon]).addTo(markersLayer);
 
-    // 1. On prépare le HTML de base du popup (avec un "Chargement...")
+    const isFavorite = (id) => favorites.value.some(f => f.id === id);
+
+    // Dans la boucle beachList.forEach(beach => { ...
+    const heartIcon = isFavorite(beach.id) ? '❤️' : '🤍';
+
     const popupHtml = `
-      <div style="text-align: center; min-width: 150px;">
-        <strong style="display:block; margin-bottom:8px; font-size:1.1em;">${beachName}</strong>
-        <div id="weather-${beach.id}" style="margin-bottom: 10px;">
-          ⏳ <i>Chargement météo...</i>
+      <div style="text-align: center; min-width: 160px;">
+        <div style="display:flex; justify-content: space-between; align-items: center; margin-bottom:8px;">
+          <strong style="font-size:1.1em;">${beachName}</strong>
+          <button id="like-${beach.id}" style="background:none; border:none; cursor:pointer; font-size:1.5rem; padding:0;">${heartIcon}</button>
         </div>
-        <button id="btn-${beach.id}" style="background:#007bff; color:white; border:none; padding:8px 12px; border-radius:4px; cursor:pointer; width: 100%;">
-          Prévisions 7 jours ➔
+        <div id="weather-${beach.id}" style="margin-bottom: 10px; font-size: 0.9em;">...</div>
+        <button id="btn-${beach.id}" style="background:#007bff; color:white; border:none; padding:8px; border-radius:4px; cursor:pointer; width: 100%;">
+          Détails 7 jours
         </button>
       </div>
     `;
@@ -118,6 +145,19 @@ const updateMap = (lat, lon, beachList) => {
       } catch (error) {
         weatherContainer.innerHTML = `<span style="color:red;">❌ Météo indisponible</span>`;
       }
+
+      // Gestion du clic sur le Like
+      const likeBtn = document.getElementById(`like-${beach.id}`);
+      likeBtn.onclick = () => {
+        toggleFavorite(beach);
+        likeBtn.innerText = isFavorite(beach.id) ? '❤️' : '🤍';
+      };
+
+      // Gestion du clic sur Détails
+      document.getElementById(`btn-${beach.id}`).onclick = () => {
+        selectedBeachForDetails.value = beach;
+        currentView.value = 'details'; // On change la vue
+      };
     });
   });
 };
@@ -172,16 +212,49 @@ const showWeather = async (beach) => {
 };
 
 const closeDetails = () => {
-  showDetails.value = false;
-
-  // On attend que Vue affiche à nouveau la div de la carte
+  currentView.value = 'map';
   nextTick(() => {
-    if (map) {
-      // Cette commande force Leaflet à se recalculer correctement
-      map.invalidateSize();
-    }
+    if (map) map.invalidateSize();
   });
 };
+
+
+// Fonction pour ajouter/supprimer un favori
+const toggleFavorite = (beach) => {
+  const index = favorites.value.findIndex(f => f.id === beach.id);
+  if (index > -1) {
+    favorites.value.splice(index, 1);
+  } else {
+    // On enregistre le nom de la plage ET la ville actuelle de recherche
+    favorites.value.push({
+      id: beach.id,
+      name: beach.tags.name || "Plage sans nom",
+      city: searchQuery.value, // On utilise la ville qui a servi à la recherche
+      lat: beach.lat,
+      lon: beach.lon,
+      tags: beach.tags
+    });
+  }
+};
+
+// // On surveille les changements de favoris pour les enregistrer
+// watch(favorites, (newFavs) => {
+//   localStorage.setItem('beach-favorites', JSON.stringify(newFavs));
+// }, { deep: true });
+
+// Surveiller le changement de vue pour rafraîchir la carte
+watch(currentView, (newView) => {
+  if (newView === 'map') {
+    // On laisse un tout petit délai pour que le DOM s'affiche
+    nextTick(() => {
+      if (map) {
+        map.invalidateSize(); // Indispensable pour les tiles et le centrage
+      }
+    });
+  }
+});
+
+
 
 </script>
 
@@ -217,4 +290,22 @@ button:disabled { background: #ccc; }
   border: 2px solid #fff;
   box-shadow: 0 4px 12px rgba(0,0,0,0.1);
 }
+.main-nav {
+  display: flex;
+  justify-content: center;
+  gap: 15px;
+  margin-bottom: 20px;
+}
+.main-nav button {
+  background: #eef2f3;
+  color: #333;
+  border: 2px solid #ccc;
+  font-weight: bold;
+}
+.main-nav button.active {
+  background: #007bff;
+  color: white;
+  border-color: #007bff;
+}
+
 </style>

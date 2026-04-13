@@ -1,7 +1,13 @@
 <template>
   <div class="weekly-container">
-    <button class="back-btn" @click="$emit('close')">⬅ Retour à la carte</button>
-    <h2>Prévisions Marines (Quartiers) : {{ beachName }}</h2>
+    <div class="header-actions">
+      <button class="back-btn" @click="$emit('close')">⬅ Retour</button>
+      <button class="like-btn" @click="$emit('toggle-favorite')">
+        {{ isFavorite ? '❤️ Faire partie de mes favoris' : '🤍 Ajouter aux favoris' }}
+      </button>
+    </div>
+
+    <h2>{{ beach.tags?.name || beach.name }}</h2>
 
     <div v-if="isLoading" class="loading">⏳ Chargement des segments de journée...</div>
 
@@ -44,11 +50,10 @@ import { ref, onMounted } from 'vue';
 import axios from 'axios';
 
 const props = defineProps({
-  lat: Number,
-  lon: Number,
-  beachName: String
+  beach: Object,
+  isFavorite: Boolean
 });
-defineEmits(['close']);
+defineEmits(['close', 'toggle-favorite']);
 
 const METEO_TOKEN = import.meta.env.VITE_METEO_TOKEN;
 const forecastDays = ref([]);
@@ -82,7 +87,6 @@ onMounted(async () => {
       }
     });
 
-    console.log("Données reçues :", res.data.forecast);
     forecastDays.value = res.data.forecast.slice(0, 7);
 
   } catch (error) {
@@ -162,4 +166,20 @@ onMounted(async () => {
   margin-top: 10px;
 }
 .loading { padding: 20px; font-style: italic; }
+
+.header-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+}
+.like-btn {
+  background: white;
+  border: 1px solid #ddd;
+  padding: 8px 15px;
+  border-radius: 20px;
+  cursor: pointer;
+  font-weight: bold;
+}
+
 </style>
