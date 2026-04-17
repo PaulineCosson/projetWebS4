@@ -1,6 +1,6 @@
 <template>
   <footer class="site-footer">
-    <p>Projet Vue.js avec  <a href="https://api.meteo-concept.com/">données météo</a> et <a href="https://www.openstreetmap.fr/">cartes interactives</a>.</p>
+    <p>Projet Vue.js avec <a href="https://api.meteo-concept.com/">données météo</a> et <a href="https://www.openstreetmap.fr/">cartes interactives</a>.</p>
     <p>Pauline Cosson - IMAC 2</p>
   </footer>
 </template>

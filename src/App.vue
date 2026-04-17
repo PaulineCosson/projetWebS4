@@ -7,46 +7,28 @@
     />
 
     <main class="app-container">
-      <section v-show="isMapView" class="map-page">
-        <div class="search-section">
-          <input
-            v-model="searchQuery"
-            @keyup.enter="searchBeaches"
-            placeholder="Ville (ex: Marseille)..."
-          />
-          <button @click="searchBeaches" :disabled="isLoading">Trouver</button>
-        </div>
-
-        <div class="radius-control">
-          <label for="radius-slider">Rayon de recherche: {{ searchRadiusKm }} km</label>
-          <input
-            id="radius-slider"
-            v-model.number="searchRadiusKm"
-            type="range"
-            min="5"
-            max="80"
-            step="5"
-          />
-        </div>
-
-        <div ref="mapContainer" class="map-view"></div>
-
-        <p v-if="errorMessage" class="error">{{ errorMessage }}</p>
-      </section>
+      <MapView
+        v-show="isMapView"
+        :favorites="favorites"
+        :is-active="isMapView"
+        @open-details="openDetails"
+        @toggle-favorite="handleToggleFavorite"
+        @search-city-change="updateLastSearchCity"
+      />
 
       <FavoritesList
         v-if="isFavoritesView"
         :favorites="favorites"
         @go-map="goToView('map')"
-        @remove="toggleFavorite"
+        @remove="handleToggleFavorite"
         @view-details="openDetails"
       />
 
       <WeeklyForecast
         v-if="isDetailsView && beachForDetails"
         :beach="beachForDetails"
-        :is-favorite="favorites.some((favorite) => favorite.id === beachForDetails.id)"
-        @toggle-favorite="toggleFavorite(beachForDetails)"
+        :is-favorite="isFavorite(beachForDetails.id)"
+        @toggle-favorite="toggleFavoriteFromDetails"
         @close="closeDetails"
       />
 
@@ -61,29 +43,22 @@
 </template>
 
 <script setup>
-import { computed, ref, onMounted, watch, nextTick } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import L from 'leaflet';
-import WeeklyForecast from './components/WeeklyForecast.vue';
-import FavoritesList from './components/FavoritesList.vue';
-import SiteHeader from './components/SiteHeader.vue';
-import AppFooter from './components/AppFooter.vue';
-import { getCityCoordinates } from './services/geocodingService';
-import { getBeachesAround } from './services/beachService';
-import { getTodayForecast } from './services/weatherService';
-import 'leaflet/dist/leaflet.css';
+import WeeklyForecast from './components/features/forecast/WeeklyForecast.vue';
+import FavoritesList from './components/features/favorites/FavoritesList.vue';
+import MapView from './components/features/map/MapView.vue';
+import SiteHeader from './components/layout/SiteHeader.vue';
+import AppFooter from './components/layout/AppFooter.vue';
+import { useFavorites } from './composables/useFavorites';
 
 const router = useRouter();
 const route = useRoute();
-const METEO_TOKEN = import.meta.env.VITE_METEO_TOKEN;
 
-const searchQuery = ref('');
-const beaches = ref([]);
-const isLoading = ref(false);
-const errorMessage = ref('');
-const searchRadiusKm = ref(loadSearchRadiusKm());
 const selectedBeachForDetails = ref(null);
-const favorites = ref(loadFavorites());
+const lastSearchCity = ref('');
+
+const { favorites, isFavorite, toggleFavorite } = useFavorites();
 
 const isMapView = computed(() => route.name === 'map');
 const isFavoritesView = computed(() => route.name === 'favorites');
@@ -128,28 +103,6 @@ const goToView = (viewName) => {
   router.push({ name: 'map' });
 };
 
-function loadFavorites() {
-  try {
-    const storedFavorites = localStorage.getItem('beach-favorites');
-    return storedFavorites ? JSON.parse(storedFavorites) : [];
-  } catch {
-    return [];
-  }
-}
-
-function loadSearchRadiusKm() {
-  const defaultRadius = 30;
-
-  try {
-    const storedRadius = Number(localStorage.getItem('beach-search-radius-km'));
-    if (Number.isNaN(storedRadius)) return defaultRadius;
-
-    return Math.min(80, Math.max(5, storedRadius));
-  } catch {
-    return defaultRadius;
-  }
-}
-
 const openDetails = (beach) => {
   selectedBeachForDetails.value = beach;
   router.push({
@@ -164,161 +117,30 @@ const openDetails = (beach) => {
   window.scrollTo(0, 0);
 };
 
-const mapContainer = ref(null);
-let map = null;
-let markersLayer = null;
+const handleToggleFavorite = (payloadOrBeach) => {
+  if (!payloadOrBeach) return;
 
-const initMap = () => {
-  if (map) return;
-  map = L.map(mapContainer.value).setView([46.2276, 2.2137], 5);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution: '© OpenStreetMap contributors',
-  }).addTo(map);
-  markersLayer = L.layerGroup().addTo(map);
-};
-
-const getWeatherEmoji = (code) => {
-  if (code === 0) return '☀️ Soleil';
-  if (code >= 1 && code <= 5) return '⛅ Éclaircies / Nuages';
-  if (code >= 10 && code <= 16) return '🌧️ Pluie';
-  if (code >= 20 && code <= 22) return '❄️ Neige';
-  if (code >= 100 && code <= 142) return '⛈️ Orage';
-  return '☁️ Couvert'; // Par défaut
-};
-
-const updateMap = (lat, lon, beachList) => {
-  if (!map) initMap();
-  markersLayer.clearLayers();
-  map.setView([lat, lon], 11);
-  const isFavorite = (id) => favorites.value.some((favorite) => favorite.id === id);
-
-  beachList.forEach((beach) => {
-    const beachName = beach.tags?.name || 'Plage sans nom';
-    const marker = L.marker([beach.lat, beach.lon]).addTo(markersLayer);
-    const heartIcon = isFavorite(beach.id) ? '❤️' : '🤍';
-
-    const popupHtml = `
-      <div style="text-align: center; min-width: 160px;">
-        <div style="display:flex; justify-content: space-between; align-items: center; margin-bottom:8px;">
-          <strong style="font-size:1.1em;">${beachName}</strong>
-          <button id="like-${beach.id}" style="background:none; border:none; cursor:pointer; font-size:1.5rem; padding:0;">${heartIcon}</button>
-        </div>
-        <div id="weather-${beach.id}" style="margin-bottom: 10px; font-size: 0.9em;">...</div>
-        <button id="btn-${beach.id}" style="background:#007bff; color:white; border:none; padding:8px; border-radius:4px; cursor:pointer; width: 100%;">
-          Détails 7 jours
-        </button>
-      </div>
-    `;
-
-    marker.bindPopup(popupHtml);
-
-    marker.on('popupopen', async () => {
-      const weatherContainer = document.getElementById(`weather-${beach.id}`);
-      const detailButton = document.getElementById(`btn-${beach.id}`);
-      const likeBtn = document.getElementById(`like-${beach.id}`);
-
-      if (!weatherContainer || !detailButton || !likeBtn) {
-        return;
-      }
-
-      detailButton.onclick = () => {
-        openDetails(beach);
-      };
-
-      try {
-        const forecast = await getTodayForecast(beach.lat, beach.lon, METEO_TOKEN);
-        const condition = getWeatherEmoji(forecast.weather);
-
-        weatherContainer.innerHTML = `
-          <div style="font-weight:bold; color:#007bff; font-size:1.2em; margin-bottom:5px;">${condition}</div>
-          💨 Vent : <b>${forecast.wind10m} km/h</b><br>
-          ⏩ Rafale : <b>${forecast.gust10m} km/h</b><br>
-          ☔ Prob. pluie : <b>${forecast.probarain}%</b>
-        `;
-      } catch (error) {
-        console.error(error);
-        weatherContainer.innerHTML = `<span style="color:red;">❌ Météo indisponible</span>`;
-      }
-
-      likeBtn.onclick = () => {
-        toggleFavorite(beach);
-        likeBtn.innerText = isFavorite(beach.id) ? '❤️' : '🤍';
-      };
-
-    });
-  });
-};
-
-onMounted(() => {
-  initMap();
-});
-
-const searchBeaches = async () => {
-  if (!searchQuery.value) return;
-  isLoading.value = true;
-  errorMessage.value = '';
-
-  try {
-    const { lat, lon } = await getCityCoordinates(searchQuery.value);
-    beaches.value = await getBeachesAround(lat, lon, searchRadiusKm.value * 1000);
-
-    updateMap(lat, lon, beaches.value);
-
-    if (beaches.value.length === 0) errorMessage.value = 'Aucune plage trouvée.';
-  } catch (error) {
-    console.error(error);
-    errorMessage.value = error instanceof Error ? error.message : 'Erreur de recherche.';
-  } finally {
-    isLoading.value = false;
+  if (payloadOrBeach.beach) {
+    toggleFavorite(payloadOrBeach.beach, payloadOrBeach.city || lastSearchCity.value);
+    return;
   }
+
+  toggleFavorite(payloadOrBeach, lastSearchCity.value);
+};
+
+const toggleFavoriteFromDetails = () => {
+  if (!beachForDetails.value) return;
+  toggleFavorite(beachForDetails.value, lastSearchCity.value);
+};
+
+const updateLastSearchCity = (cityName) => {
+  lastSearchCity.value = cityName;
 };
 
 const closeDetails = () => {
   selectedBeachForDetails.value = null;
   router.push({ name: 'map' });
-  nextTick(() => {
-    if (map) map.invalidateSize();
-  });
 };
-
-const toggleFavorite = (beach) => {
-  if (!beach) return;
-
-  const index = favorites.value.findIndex((favorite) => favorite.id === beach.id);
-  if (index > -1) {
-    favorites.value.splice(index, 1);
-  } else {
-    favorites.value.push({
-      id: beach.id,
-      name: beach.tags?.name || 'Plage sans nom',
-      city: searchQuery.value,
-      lat: beach.lat,
-      lon: beach.lon,
-      tags: beach.tags,
-    });
-  }
-};
-
-watch(favorites, (newFavs) => {
-  localStorage.setItem('beach-favorites', JSON.stringify(newFavs));
-}, { deep: true });
-
-watch(searchRadiusKm, (newRadius) => {
-  localStorage.setItem('beach-search-radius-km', String(newRadius));
-});
-
-watch(
-  () => route.name,
-  (newRouteName) => {
-    if (newRouteName !== 'map') return;
-
-    nextTick(() => {
-      if (map) {
-        map.invalidateSize();
-      }
-    });
-  }
-);
 
 watch(
   () => route.query,
@@ -336,15 +158,6 @@ watch(
 </script>
 
 <style>
-body {
-  font-family: 'Segoe UI', sans-serif;
-  background:
-    radial-gradient(circle at top, rgba(110, 184, 255, 0.2), transparent 40%),
-    linear-gradient(180deg, #eef7fb 0%, #f7f9fb 100%);
-  margin: 0;
-  min-height: 100vh;
-}
-
 .app-shell {
   min-height: 100vh;
   display: flex;
@@ -358,64 +171,6 @@ body {
   flex: 1;
 }
 
-*,
-*::before,
-*::after {
-  box-sizing: border-box;
-}
-
-.search-section {
-  display: flex;
-  gap: 10px;
-  justify-content: center;
-  margin-bottom: 1rem;
-  width: min(100%, 34rem);
-  margin-left: auto;
-  margin-right: auto;
-}
-
-.radius-control {
-  margin: 0 auto 1.25rem;
-  width: min(100%, 34rem);
-  display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
-  color: #24465f;
-  font-weight: 600;
-}
-
-.radius-control input[type='range'] {
-  width: 100%;
-  accent-color: #10324a;
-}
-
-input {
-  padding: 12px;
-  border: 1px solid #cfdbe6;
-  border-radius: 999px;
-  width: 100%;
-  background: rgba(255, 255, 255, 0.9);
-}
-
-button {
-  padding: 12px 20px;
-  background: #10324a;
-  color: white;
-  border: none;
-  border-radius: 999px;
-  cursor: pointer;
-}
-
-button:disabled {
-  background: #9ca6af;
-}
-
-.error {
-  color: #b42318;
-  font-weight: 700;
-  text-align: center;
-}
-
 .details-empty-state {
   text-align: center;
   padding: 2rem 1rem;
@@ -426,45 +181,12 @@ button:disabled {
   margin-bottom: 1rem;
 }
 
-.map-view {
-  height: 400px;
-  width: 100%;
-  border-radius: 12px;
-  margin-bottom: 2rem;
-  z-index: 1; /* Pour éviter que la carte passe au dessus d'éventuels menus */
-  border: 2px solid #fff;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-}
-
 @media (max-width: 640px) {
   .app-container {
     width: min(100%, calc(100% - 1rem));
     padding: 0.75rem 0 1.5rem;
   }
 
-  .search-section {
-    flex-direction: column;
-    gap: 0.75rem;
-  }
-
-  input,
-  button {
-    width: 100%;
-  }
-
-  .search-section,
-  .radius-control {
-    width: 100%;
-  }
-
-  .radius-control {
-    font-size: 0.95rem;
-  }
-
-  .map-view {
-    height: 320px;
-    margin-bottom: 1.25rem;
-  }
 }
 
 </style>

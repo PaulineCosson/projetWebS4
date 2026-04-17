@@ -56,7 +56,8 @@
 
 <script setup>
 import { ref, watch } from 'vue';
-import { getWeeklyForecastByPeriod } from '../services/weatherService';
+import { getWeeklyForecastByPeriod } from '../../../services/api/weatherService';
+import { getWeatherEmoji } from '../../../utils/weatherCode';
 
 const props = defineProps({
   beach: {
@@ -72,17 +73,9 @@ const forecastDays = ref([]);
 const isLoading = ref(false);
 const errorMessage = ref('');
 
-const getWeatherEmoji = (code) => {
-  if (code === 0) return '☀️';
-  if (code >= 1 && code <= 5) return '⛅';
-  if (code >= 10 && code <= 16) return '🌧️';
-  if (code >= 100 && code <= 142) return '⛈️';
-  return '☁️';
-};
-
 const getPeriodName = (periodIndex) => {
-  const names = ["Nuit", "Matin", "Après-midi", "Soirée"];
-  return names[periodIndex] || "N/A";
+  const names = ['Nuit', 'Matin', 'Après-midi', 'Soirée'];
+  return names[periodIndex] || 'N/A';
 };
 
 const formatDate = (dateString) => {
@@ -102,7 +95,6 @@ const loadForecast = async () => {
     errorMessage.value = '';
     const weeklyForecast = await getWeeklyForecastByPeriod(props.beach.lat, props.beach.lon, METEO_TOKEN);
     forecastDays.value = weeklyForecast.slice(0, 7);
-
   } catch (error) {
     console.error('Erreur API :', error);
     forecastDays.value = [];
@@ -127,8 +119,9 @@ watch(
   margin-bottom: 2rem;
   border-radius: 12px;
   overflow: hidden;
-  box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
 }
+
 .date-title {
   background: #007bff;
   color: white;
@@ -137,12 +130,17 @@ watch(
   text-transform: capitalize;
   font-size: 1rem;
 }
-.table-wrapper { overflow-x: auto; }
+
+.table-wrapper {
+  overflow-x: auto;
+}
+
 .wind-table {
   width: 100%;
   border-collapse: collapse;
   text-align: center;
 }
+
 .wind-table th {
   background: #f8f9fa;
   padding: 10px;
@@ -150,26 +148,39 @@ watch(
   color: #666;
   text-transform: uppercase;
 }
+
 .wind-table td {
   padding: 12px 10px;
   border-top: 1px solid #eee;
 }
+
 .hour {
   font-weight: bold;
   color: #333;
 }
-.emoji { font-size: 1.5rem; }
+
+.emoji {
+  font-size: 1.5rem;
+}
+
 .wind-speed {
   color: #007bff;
   font-weight: bold;
-  font-size: 1.1rem; }
-.unit { font-size: 0.7rem; color: #999; }
+  font-size: 1.1rem;
+}
+
+.unit {
+  font-size: 0.7rem;
+  color: #999;
+}
+
 .wind-dir {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 2px;
 }
+
 .arrow {
   font-size: 1.5rem;
   font-weight: bold;
@@ -178,7 +189,12 @@ watch(
   height: 30px;
   transition: transform 0.5s ease;
 }
-.deg { font-size: 0.65rem; color: #888; }
+
+.deg {
+  font-size: 0.65rem;
+  color: #888;
+}
+
 .back-btn {
   background: #333;
   color: white;
@@ -189,7 +205,11 @@ watch(
   margin-bottom: 20px;
   margin-top: 10px;
 }
-.loading { padding: 20px; font-style: italic; }
+
+.loading {
+  padding: 20px;
+  font-style: italic;
+}
 
 .error,
 .empty-state {
@@ -208,6 +228,7 @@ watch(
   align-items: center;
   margin-bottom: 15px;
 }
+
 .like-btn {
   background: white;
   border: 1px solid #ddd;
@@ -283,5 +304,4 @@ watch(
     font-size: 0.58rem;
   }
 }
-
 </style>

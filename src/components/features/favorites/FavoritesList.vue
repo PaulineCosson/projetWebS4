@@ -54,7 +54,7 @@
 
 <script setup>
 import { computed, ref, watch } from 'vue';
-import { getTodayForecast } from '../services/weatherService';
+import { getTodayForecast } from '../../../services/api/weatherService';
 
 const props = defineProps({
   favorites: {
@@ -74,7 +74,7 @@ const weatherByBeachId = ref({});
 
 function isBadWeather(weatherCode) {
   if (typeof weatherCode !== 'number') return false;
-  return weatherCode > 2; // Nuageux à partir du code 3
+  return weatherCode > 2;
 }
 
 function getWindValue(forecast) {
@@ -146,6 +146,10 @@ watch(
 </script>
 
 <style scoped>
+.favorites-container {
+  margin-top: 1rem;
+}
+
 .controls-panel {
   margin-top: 1rem;
   display: flex;
@@ -169,7 +173,6 @@ watch(
   background: white;
   color: #365265;
   font-weight: 500;
-
 }
 
 .checkbox-item {
@@ -231,19 +234,67 @@ watch(
   margin-top: 1rem;
 }
 
-.fav-grid { display: grid; gap: 15px; margin-top: 20px; }
-.fav-card {
-  background: white; padding: 15px; border-radius: 12px;
-  display: flex; justify-content: space-between; align-items: center;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+.fav-grid {
+  display: grid;
+  gap: 15px;
+  margin-top: 20px;
 }
-.fav-info h3 { margin: 0; font-size: 1.1rem; color: #333; }
-.city-name { margin: 5px 0 0; color: #666; font-size: 0.9rem; }
-.weather-line { margin: 6px 0 0; color: #24465f; font-size: 0.9rem; font-weight: 600; }
-.weather-line.muted { color: #8294a1; font-weight: 500; }
-.fav-actions { display: flex; gap: 10px; }
-.btn-details { background: #007bff; color: white; border: none; padding: 8px 15px; border-radius: 6px; cursor: pointer; }
-.btn-remove { background: #fee; border: none; padding: 8px; border-radius: 6px; cursor: pointer; }
+
+.fav-card {
+  background: white;
+  padding: 15px;
+  border-radius: 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.fav-info h3 {
+  margin: 0;
+  font-size: 1.1rem;
+  color: #333;
+}
+
+.city-name {
+  margin: 5px 0 0;
+  color: #666;
+  font-size: 0.9rem;
+}
+
+.weather-line {
+  margin: 6px 0 0;
+  color: #24465f;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.weather-line.muted {
+  color: #8294a1;
+  font-weight: 500;
+}
+
+.fav-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.btn-details {
+  background: #007bff;
+  color: white;
+  border: none;
+  padding: 8px 15px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.btn-remove {
+  background: #fee;
+  border: none;
+  padding: 8px;
+  border-radius: 6px;
+  cursor: pointer;
+}
 
 @media (max-width: 640px) {
   .fav-card {
