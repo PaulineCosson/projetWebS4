@@ -45,12 +45,14 @@
 
 <script setup>
 import { ref, onMounted, watch, nextTick } from 'vue';
-import axios from 'axios';
 import L from 'leaflet';
 import WeeklyForecast from './components/WeeklyForecast.vue';
 import FavoritesList from './components/FavoritesList.vue';
 import SiteHeader from './components/SiteHeader.vue';
 import AppFooter from './components/AppFooter.vue';
+import { getCityCoordinates } from './services/geocodingService';
+import { getBeachesAround } from './services/beachService';
+import { getTodayForecast } from './services/weatherService';
 import 'leaflet/dist/leaflet.css';
 
 const METEO_TOKEN = import.meta.env.VITE_METEO_TOKEN;
@@ -140,11 +142,7 @@ const updateMap = (lat, lon, beachList) => {
       };
 
       try {
-        const res = await axios.get(`https://api.meteo-concept.com/api/forecast/daily/0`, {
-          params: { token: METEO_TOKEN, latlng: `${beach.lat},${beach.lon}` },
-        });
-
-        const forecast = res.data.forecast;
+        const forecast = await getTodayForecast(beach.lat, beach.lon, METEO_TOKEN);
         const condition = getWeatherEmoji(forecast.weather);
 
         weatherContainer.innerHTML = `
@@ -177,19 +175,9 @@ const searchBeaches = async () => {
   errorMessage.value = '';
 
   try {
-    const geoRes = await axios.get(`https://nominatim.openstreetmap.org/search`, {
-      params: { q: searchQuery.value, format: 'json', limit: 1 },
-    });
+    const { lat, lon } = await getCityCoordinates(searchQuery.value);
+    beaches.value = await getBeachesAround(lat, lon);
 
-    if (geoRes.data.length === 0) throw new Error('Ville introuvable.');
-    const { lat, lon } = geoRes.data[0];
-
-    const query = `[out:json];node["natural"="beach"](around:30000,${lat},${lon});out;`;
-    const overpassRes = await axios.get(`https://overpass-api.de/api/interpreter?data=${encodeURIComponent(query)}`);
-
-    beaches.value = overpassRes.data.elements;
-
-    // Mettre à jour la carte avec les nouvelles données
     updateMap(lat, lon, beaches.value);
 
     if (beaches.value.length === 0) errorMessage.value = 'Aucune plage trouvée.';

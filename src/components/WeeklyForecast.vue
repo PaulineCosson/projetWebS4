@@ -56,7 +56,7 @@
 
 <script setup>
 import { ref, watch } from 'vue';
-import axios from 'axios';
+import { getWeeklyForecastByPeriod } from '../services/weatherService';
 
 const props = defineProps({
   beach: {
@@ -100,14 +100,8 @@ const loadForecast = async () => {
   try {
     isLoading.value = true;
     errorMessage.value = '';
-    const res = await axios.get(`https://api.meteo-concept.com/api/forecast/daily/periods`, {
-      params: {
-        token: METEO_TOKEN,
-        latlng: `${props.beach.lat},${props.beach.lon}`,
-      },
-    });
-
-    forecastDays.value = (res.data.forecast || []).slice(0, 7);
+    const weeklyForecast = await getWeeklyForecastByPeriod(props.beach.lat, props.beach.lon, METEO_TOKEN);
+    forecastDays.value = weeklyForecast.slice(0, 7);
 
   } catch (error) {
     console.error('Erreur API :', error);
