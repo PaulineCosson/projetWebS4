@@ -138,9 +138,9 @@ const updateMap = (lat, lon, beachList) => {
         // On remplace le texte de chargement par les vraies données !
         weatherContainer.innerHTML = `
           <div style="font-weight:bold; color:#007bff; font-size:1.2em; margin-bottom:5px;">${condition}</div>
-          🌡️ Température : <b>${forecast.temp2m}°C</b><br>
           💨 Vent : <b>${forecast.wind10m} km/h</b><br>
-          ☔ Prob. pluie : <b>${forecast.proprobailite}%</b>
+          ⏩ Rafale : <b>${forecast.gust10m} km/h</b><br>
+          ☔ Prob. pluie : <b>${forecast.probarain}%</b>
         `;
       } catch (error) {
         weatherContainer.innerHTML = `<span style="color:red;">❌ Météo indisponible</span>`;
@@ -238,9 +238,9 @@ const toggleFavorite = (beach) => {
 };
 
 // // On surveille les changements de favoris pour les enregistrer
-// watch(favorites, (newFavs) => {
-//   localStorage.setItem('beach-favorites', JSON.stringify(newFavs));
-// }, { deep: true });
+watch(favorites, (newFavs) => {
+  localStorage.setItem('beach-favorites', JSON.stringify(newFavs));
+}, { deep: true });
 
 // Surveiller le changement de vue pour rafraîchir la carte
 watch(currentView, (newView) => {

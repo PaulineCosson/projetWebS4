@@ -19,24 +19,28 @@
           <thead>
             <tr>
               <th>Moment</th>
-              <th>Météo</th>
               <th>Vent</th>
+              <th>Rafales</th>
               <th>Direction</th>
+              <th>Météo</th>
               <th>Pluie</th>
             </tr>
           </thead>
           <tbody>
             <tr v-for="slot in day" :key="slot.period">
               <td class="hour">{{ getPeriodName(slot.period) }}</td>
-              <td class="emoji">{{ getWeatherEmoji(slot.weather) }}</td>
               <td class="wind-speed">
                 {{ slot.wind10m }} <span class="unit">km/h</span>
+              </td>
+              <td class="wind-speed">
+                {{ slot.gust10m }} <span class="unit">km/h</span>
               </td>
               <td class="wind-dir">
                 <div class="arrow" :style="{ transform: `rotate(${slot.dirwind10m}deg)` }">↓</div>
                 <span class="deg">{{ slot.dirwind10m }}°</span>
               </td>
-              <td class="rain">{{ slot.proprobailite }}%</td>
+              <td class="emoji">{{ getWeatherEmoji(slot.weather) }}</td>
+              <td class="rain">{{ slot.probarain }}%</td>
             </tr>
           </tbody>
         </table>
