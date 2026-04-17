@@ -247,9 +247,28 @@ watch(
 
 @media (max-width: 640px) {
   .fav-card {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 0.8rem;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.9rem 0.85rem;
+  }
+
+  .fav-info {
+    min-width: 0;
+  }
+
+  .fav-actions {
+    justify-self: end;
+    align-self: center;
+    gap: 0.5rem;
+  }
+
+  .btn-details,
+  .btn-remove {
+    white-space: nowrap;
+    min-height: 40px;
+    padding: 0.6rem 0.8rem;
   }
 }
 </style>

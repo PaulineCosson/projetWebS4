@@ -101,7 +101,9 @@ h1 {
 
 @media (max-width: 640px) {
   .site-header {
-    padding-top: 1.25rem;
+    width: min(100%, calc(100% - 1rem));
+    padding: 1rem 0 0.75rem;
+    gap: 1rem;
   }
 
   .brand-block,
@@ -109,8 +111,23 @@ h1 {
     width: 100%;
   }
 
+  .brand-block {
+    text-align: center;
+  }
+
+  h1 {
+    font-size: clamp(1.7rem, 8vw, 2.25rem);
+  }
+
+  .subtitle {
+    max-width: none;
+    font-size: 0.95rem;
+  }
+
   .main-nav button {
     flex: 1 1 0;
+    padding: 0.8rem 0.9rem;
+    min-height: 44px;
   }
 }
 </style>

@@ -215,6 +215,73 @@ watch(
   border-radius: 20px;
   cursor: pointer;
   font-weight: bold;
+  margin-left: 8px;
+}
+
+@media (max-width: 640px) {
+  .weekly-container {
+    width: 100%;
+  }
+
+  .header-actions {
+    gap: 0.75rem;
+    align-items: stretch;
+  }
+
+  .back-btn,
+  .like-btn {
+    flex: 1 1 0;
+    min-height: 44px;
+    padding: 0.75rem 0.9rem;
+    margin: 0;
+  }
+
+  h2 {
+    font-size: 1.25rem;
+    margin-bottom: 0.75rem;
+  }
+
+  .day-group {
+    margin-bottom: 1rem;
+  }
+
+  .date-title {
+    padding: 0.8rem 1rem;
+    font-size: 0.95rem;
+  }
+
+  .table-wrapper {
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .wind-table th,
+  .wind-table td {
+    padding: 0.65rem 0.45rem;
+  }
+
+  .wind-table th {
+    font-size: 0.68rem;
+  }
+
+  .hour,
+  .wind-speed,
+  .rain {
+    font-size: 0.86rem;
+  }
+
+  .emoji {
+    font-size: 1.2rem;
+  }
+
+  .arrow {
+    width: 24px;
+    height: 24px;
+    font-size: 1.15rem;
+  }
+
+  .deg {
+    font-size: 0.58rem;
+  }
 }
 
 </style>

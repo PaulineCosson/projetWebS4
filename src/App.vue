@@ -358,11 +358,20 @@ body {
   flex: 1;
 }
 
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
 .search-section {
   display: flex;
   gap: 10px;
   justify-content: center;
   margin-bottom: 1rem;
+  width: min(100%, 34rem);
+  margin-left: auto;
+  margin-right: auto;
 }
 
 .radius-control {
@@ -384,7 +393,7 @@ input {
   padding: 12px;
   border: 1px solid #cfdbe6;
   border-radius: 999px;
-  width: min(100%, 34rem);
+  width: 100%;
   background: rgba(255, 255, 255, 0.9);
 }
 
@@ -428,13 +437,33 @@ button:disabled {
 }
 
 @media (max-width: 640px) {
+  .app-container {
+    width: min(100%, calc(100% - 1rem));
+    padding: 0.75rem 0 1.5rem;
+  }
+
   .search-section {
     flex-direction: column;
+    gap: 0.75rem;
   }
 
   input,
   button {
     width: 100%;
+  }
+
+  .search-section,
+  .radius-control {
+    width: 100%;
+  }
+
+  .radius-control {
+    font-size: 0.95rem;
+  }
+
+  .map-view {
+    height: 320px;
+    margin-bottom: 1.25rem;
   }
 }
 
