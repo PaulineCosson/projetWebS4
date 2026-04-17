@@ -7,61 +7,70 @@
       </button>
     </div>
 
-    <h2>{{ beach.tags?.name || beach.name }}</h2>
+    <h2>{{ beach?.tags?.name || beach?.name }}</h2>
 
     <div v-if="isLoading" class="loading">⏳ Chargement des segments de journée...</div>
+    <p v-else-if="errorMessage" class="error">{{ errorMessage }}</p>
 
-    <div v-else v-for="(day, index) in forecastDays" :key="index" class="day-group">
-      <h3 class="date-title">{{ formatDate(day[0].datetime) }}</h3>
+    <div v-else-if="forecastDays.length">
+      <div v-for="(day, index) in forecastDays" :key="index" class="day-group">
+        <h3 class="date-title">{{ formatDate(day[0].datetime) }}</h3>
 
-      <div class="table-wrapper">
-        <table class="wind-table">
-          <thead>
-            <tr>
-              <th>Moment</th>
-              <th>Vent</th>
-              <th>Rafales</th>
-              <th>Direction</th>
-              <th>Météo</th>
-              <th>Pluie</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="slot in day" :key="slot.period">
-              <td class="hour">{{ getPeriodName(slot.period) }}</td>
-              <td class="wind-speed">
-                {{ slot.wind10m }} <span class="unit">km/h</span>
-              </td>
-              <td class="wind-speed">
-                {{ slot.gust10m }} <span class="unit">km/h</span>
-              </td>
-              <td class="wind-dir">
-                <div class="arrow" :style="{ transform: `rotate(${slot.dirwind10m}deg)` }">↓</div>
-                <span class="deg">{{ slot.dirwind10m }}°</span>
-              </td>
-              <td class="emoji">{{ getWeatherEmoji(slot.weather) }}</td>
-              <td class="rain">{{ slot.probarain }}%</td>
-            </tr>
-          </tbody>
-        </table>
+        <div class="table-wrapper">
+          <table class="wind-table">
+            <thead>
+              <tr>
+                <th>Moment</th>
+                <th>Vent</th>
+                <th>Rafales</th>
+                <th>Direction</th>
+                <th>Météo</th>
+                <th>Pluie</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="slot in day" :key="slot.period">
+                <td class="hour">{{ getPeriodName(slot.period) }}</td>
+                <td class="wind-speed">
+                  {{ slot.wind10m }} <span class="unit">km/h</span>
+                </td>
+                <td class="wind-speed">
+                  {{ slot.gust10m }} <span class="unit">km/h</span>
+                </td>
+                <td class="wind-dir">
+                  <div class="arrow" :style="{ transform: `rotate(${slot.dirwind10m}deg)` }">↓</div>
+                  <span class="deg">{{ slot.dirwind10m }}°</span>
+                </td>
+                <td class="emoji">{{ getWeatherEmoji(slot.weather) }}</td>
+                <td class="rain">{{ slot.probarain }}%</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
+
+    <p v-else class="empty-state">Aucune prévision disponible pour cette plage.</p>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue';
+import { ref, watch } from 'vue';
 import axios from 'axios';
 
 const props = defineProps({
-  beach: Object,
-  isFavorite: Boolean
+  beach: {
+    type: Object,
+    default: null,
+  },
+  isFavorite: Boolean,
 });
 defineEmits(['close', 'toggle-favorite']);
 
 const METEO_TOKEN = import.meta.env.VITE_METEO_TOKEN;
 const forecastDays = ref([]);
-const isLoading = ref(true);
+const isLoading = ref(false);
+const errorMessage = ref('');
 
 const getWeatherEmoji = (code) => {
   if (code === 0) return '☀️';
@@ -81,24 +90,41 @@ const formatDate = (dateString) => {
   return date.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
 };
 
-onMounted(async () => {
+const loadForecast = async () => {
+  if (props.beach?.lat == null || props.beach?.lon == null) {
+    forecastDays.value = [];
+    errorMessage.value = 'Impossible de charger la météo de cette plage.';
+    return;
+  }
+
   try {
     isLoading.value = true;
+    errorMessage.value = '';
     const res = await axios.get(`https://api.meteo-concept.com/api/forecast/daily/periods`, {
       params: {
         token: METEO_TOKEN,
-        latlng: `${props.lat},${props.lon}`
-      }
+        latlng: `${props.beach.lat},${props.beach.lon}`,
+      },
     });
 
-    forecastDays.value = res.data.forecast.slice(0, 7);
+    forecastDays.value = (res.data.forecast || []).slice(0, 7);
 
   } catch (error) {
-    console.error("Erreur API :", error);
+    console.error('Erreur API :', error);
+    forecastDays.value = [];
+    errorMessage.value = 'La météo est temporairement indisponible.';
   } finally {
     isLoading.value = false;
   }
-});
+};
+
+watch(
+  () => props.beach,
+  () => {
+    loadForecast();
+  },
+  { immediate: true }
+);
 </script>
 
 <style scoped>
@@ -170,6 +196,17 @@ onMounted(async () => {
   margin-top: 10px;
 }
 .loading { padding: 20px; font-style: italic; }
+
+.error,
+.empty-state {
+  padding: 20px;
+  text-align: center;
+  color: #5b6772;
+}
+
+.error {
+  color: #b42318;
+}
 
 .header-actions {
   display: flex;
