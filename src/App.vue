@@ -3,11 +3,11 @@
     <SiteHeader
       :current-view="currentView"
       :favorites-count="favorites.length"
-      @change-view="currentView = $event"
+      @change-view="goToView"
     />
 
     <main class="app-container">
-      <section v-show="currentView === 'map'" class="map-page">
+      <section v-show="isMapView" class="map-page">
         <div class="search-section">
           <input
             v-model="searchQuery"
@@ -23,20 +23,25 @@
       </section>
 
       <FavoritesList
-        v-if="currentView === 'favorites'"
+        v-if="isFavoritesView"
         :favorites="favorites"
-        @go-map="currentView = 'map'"
+        @go-map="goToView('map')"
         @remove="toggleFavorite"
         @view-details="openDetails"
       />
 
       <WeeklyForecast
-        v-if="currentView === 'details' && selectedBeachForDetails"
-        :beach="selectedBeachForDetails"
-        :is-favorite="favorites.some((favorite) => favorite.id === selectedBeachForDetails.id)"
-        @toggle-favorite="toggleFavorite(selectedBeachForDetails)"
+        v-if="isDetailsView && beachForDetails"
+        :beach="beachForDetails"
+        :is-favorite="favorites.some((favorite) => favorite.id === beachForDetails.id)"
+        @toggle-favorite="toggleFavorite(beachForDetails)"
         @close="closeDetails"
       />
+
+      <section v-else-if="isDetailsView" class="details-empty-state">
+        <p>Sélectionne une plage sur la carte ou dans tes favoris pour voir ses prévisions.</p>
+        <button type="button" @click="goToView('map')">Retour à la carte</button>
+      </section>
     </main>
 
     <AppFooter />
@@ -44,7 +49,8 @@
 </template>
 
 <script setup>
-import { ref, onMounted, watch, nextTick } from 'vue';
+import { computed, ref, onMounted, watch, nextTick } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 import L from 'leaflet';
 import WeeklyForecast from './components/WeeklyForecast.vue';
 import FavoritesList from './components/FavoritesList.vue';
@@ -55,6 +61,8 @@ import { getBeachesAround } from './services/beachService';
 import { getTodayForecast } from './services/weatherService';
 import 'leaflet/dist/leaflet.css';
 
+const router = useRouter();
+const route = useRoute();
 const METEO_TOKEN = import.meta.env.VITE_METEO_TOKEN;
 
 const searchQuery = ref('');
@@ -62,8 +70,50 @@ const beaches = ref([]);
 const isLoading = ref(false);
 const errorMessage = ref('');
 const selectedBeachForDetails = ref(null);
-const currentView = ref('map');
 const favorites = ref(loadFavorites());
+
+const isMapView = computed(() => route.name === 'map');
+const isFavoritesView = computed(() => route.name === 'favorites');
+const isDetailsView = computed(() => route.name === 'details');
+const currentView = computed(() => {
+  if (route.name === 'favorites') return 'favorites';
+  if (route.name === 'details') return 'details';
+  return 'map';
+});
+
+const beachFromRoute = computed(() => {
+  if (route.name !== 'details') return null;
+
+  const lat = Number(route.query.lat);
+  const lon = Number(route.query.lon);
+  if (Number.isNaN(lat) || Number.isNaN(lon)) return null;
+
+  const beachId = route.query.id ? Number(route.query.id) : `route-${lat}-${lon}`;
+  const beachName = typeof route.query.name === 'string' && route.query.name
+    ? route.query.name
+    : 'Plage sans nom';
+
+  return {
+    id: beachId,
+    lat,
+    lon,
+    name: beachName,
+    tags: {
+      name: beachName,
+    },
+  };
+});
+
+const beachForDetails = computed(() => selectedBeachForDetails.value ?? beachFromRoute.value);
+
+const goToView = (viewName) => {
+  if (viewName === 'favorites') {
+    router.push({ name: 'favorites' });
+    return;
+  }
+
+  router.push({ name: 'map' });
+};
 
 function loadFavorites() {
   try {
@@ -76,7 +126,15 @@ function loadFavorites() {
 
 const openDetails = (beach) => {
   selectedBeachForDetails.value = beach;
-  currentView.value = 'details';
+  router.push({
+    name: 'details',
+    query: {
+      id: String(beach.id),
+      lat: String(beach.lat),
+      lon: String(beach.lon),
+      name: beach.tags?.name || beach.name || 'Plage sans nom',
+    },
+  });
   window.scrollTo(0, 0);
 };
 
@@ -190,8 +248,8 @@ const searchBeaches = async () => {
 };
 
 const closeDetails = () => {
-  currentView.value = 'map';
   selectedBeachForDetails.value = null;
+  router.push({ name: 'map' });
   nextTick(() => {
     if (map) map.invalidateSize();
   });
@@ -219,15 +277,31 @@ watch(favorites, (newFavs) => {
   localStorage.setItem('beach-favorites', JSON.stringify(newFavs));
 }, { deep: true });
 
-watch(currentView, (newView) => {
-  if (newView === 'map') {
+watch(
+  () => route.name,
+  (newRouteName) => {
+    if (newRouteName !== 'map') return;
+
     nextTick(() => {
       if (map) {
         map.invalidateSize();
       }
     });
   }
-});
+);
+
+watch(
+  () => route.query,
+  () => {
+    if (route.name === 'details') {
+      selectedBeachForDetails.value = beachFromRoute.value;
+      return;
+    }
+
+    selectedBeachForDetails.value = null;
+  },
+  { immediate: true }
+);
 
 </script>
 
@@ -286,6 +360,16 @@ button:disabled {
   color: #b42318;
   font-weight: 700;
   text-align: center;
+}
+
+.details-empty-state {
+  text-align: center;
+  padding: 2rem 1rem;
+  color: #4a6375;
+}
+
+.details-empty-state p {
+  margin-bottom: 1rem;
 }
 
 .map-view {
