@@ -17,6 +17,18 @@
           <button @click="searchBeaches" :disabled="isLoading">Trouver</button>
         </div>
 
+        <div class="radius-control">
+          <label for="radius-slider">Rayon de recherche: {{ searchRadiusKm }} km</label>
+          <input
+            id="radius-slider"
+            v-model.number="searchRadiusKm"
+            type="range"
+            min="5"
+            max="80"
+            step="5"
+          />
+        </div>
+
         <div ref="mapContainer" class="map-view"></div>
 
         <p v-if="errorMessage" class="error">{{ errorMessage }}</p>
@@ -69,6 +81,7 @@ const searchQuery = ref('');
 const beaches = ref([]);
 const isLoading = ref(false);
 const errorMessage = ref('');
+const searchRadiusKm = ref(loadSearchRadiusKm());
 const selectedBeachForDetails = ref(null);
 const favorites = ref(loadFavorites());
 
@@ -121,6 +134,19 @@ function loadFavorites() {
     return storedFavorites ? JSON.parse(storedFavorites) : [];
   } catch {
     return [];
+  }
+}
+
+function loadSearchRadiusKm() {
+  const defaultRadius = 30;
+
+  try {
+    const storedRadius = Number(localStorage.getItem('beach-search-radius-km'));
+    if (Number.isNaN(storedRadius)) return defaultRadius;
+
+    return Math.min(80, Math.max(5, storedRadius));
+  } catch {
+    return defaultRadius;
   }
 }
 
@@ -234,7 +260,7 @@ const searchBeaches = async () => {
 
   try {
     const { lat, lon } = await getCityCoordinates(searchQuery.value);
-    beaches.value = await getBeachesAround(lat, lon);
+    beaches.value = await getBeachesAround(lat, lon, searchRadiusKm.value * 1000);
 
     updateMap(lat, lon, beaches.value);
 
@@ -276,6 +302,10 @@ const toggleFavorite = (beach) => {
 watch(favorites, (newFavs) => {
   localStorage.setItem('beach-favorites', JSON.stringify(newFavs));
 }, { deep: true });
+
+watch(searchRadiusKm, (newRadius) => {
+  localStorage.setItem('beach-search-radius-km', String(newRadius));
+});
 
 watch(
   () => route.name,
@@ -332,7 +362,22 @@ body {
   display: flex;
   gap: 10px;
   justify-content: center;
-  margin-bottom: 2rem;
+  margin-bottom: 1rem;
+}
+
+.radius-control {
+  margin: 0 auto 1.25rem;
+  width: min(100%, 34rem);
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  color: #24465f;
+  font-weight: 600;
+}
+
+.radius-control input[type='range'] {
+  width: 100%;
+  accent-color: #10324a;
 }
 
 input {

@@ -3,7 +3,7 @@
     <div class="header-actions">
       <button class="back-btn" @click="$emit('close')">⬅ Retour</button>
       <button class="like-btn" @click="$emit('toggle-favorite')">
-        {{ isFavorite ? '❤️ Faire partie de mes favoris' : '🤍 Ajouter aux favoris' }}
+        {{ isFavorite ? '❤️' : '🤍' }}
       </button>
     </div>
 

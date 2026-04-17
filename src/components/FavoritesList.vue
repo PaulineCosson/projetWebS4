@@ -7,15 +7,45 @@
       <button @click="$emit('go-map')" class="btn-primary">Explorer la carte</button>
     </div>
 
-    <div v-else class="fav-grid">
-      <div v-for="beach in favorites" :key="beach.id" class="fav-card">
-        <div class="fav-info">
-          <h3>{{ beach.name }}</h3>
-          <p class="city-name">📍 {{ beach.city }}</p>
-        </div>
-        <div class="fav-actions">
-          <button @click="$emit('view-details', beach)" class="btn-details">Météo</button>
-          <button @click="$emit('remove', beach)" class="btn-remove">🗑️</button>
+    <div v-else>
+      <div class="controls-panel">
+        <label class="control-item" for="sort-mode">
+          Trier les favoris
+          <select id="sort-mode" v-model="sortMode">
+            <option value="none">Sans tri</option>
+            <option value="wind-desc">Vent décroissant</option>
+            <option value="temp-desc">Température décroissante</option>
+          </select>
+        </label>
+
+        <label class="control-item checkbox-item">
+          <input v-model="hideBadWeather" type="checkbox" />
+          Uniquement les plages avec du soleil
+        </label>
+      </div>
+
+      <p v-if="isLoadingWeather" class="status-row">Mise à jour météo des favoris...</p>
+
+      <p v-if="displayedFavorites.length === 0" class="empty-state inline-empty">
+        Aucune plage ne correspond au tri/filtre actuel.
+      </p>
+
+      <div v-else class="fav-grid">
+        <div v-for="beach in displayedFavorites" :key="beach.id" class="fav-card">
+          <div class="fav-info">
+            <h3>{{ beach.name }}</h3>
+            <p class="city-name">📍 {{ beach.city }}</p>
+            <p class="weather-line" v-if="weatherByBeachId[beach.id]">
+              💨 {{ getWindValue(weatherByBeachId[beach.id]) }} km/h
+              · 🌡️ {{ getTemperatureValue(weatherByBeachId[beach.id]) }}°C
+            </p>
+            <p class="weather-line muted" v-else>Météo indisponible pour le tri avancé</p>
+          </div>
+
+          <div class="fav-actions">
+            <button @click="$emit('view-details', beach)" class="btn-details">Météo</button>
+            <button @click="$emit('remove', beach)" class="btn-remove">🗑️</button>
+          </div>
         </div>
       </div>
     </div>
@@ -23,11 +53,142 @@
 </template>
 
 <script setup>
-defineProps(['favorites']);
+import { computed, ref, watch } from 'vue';
+import { getTodayForecast } from '../services/weatherService';
+
+const props = defineProps({
+  favorites: {
+    type: Array,
+    default: () => [],
+  },
+});
+
 defineEmits(['go-map', 'view-details', 'remove']);
+
+const METEO_TOKEN = import.meta.env.VITE_METEO_TOKEN;
+
+const sortMode = ref('none');
+const hideBadWeather = ref(false);
+const isLoadingWeather = ref(false);
+const weatherByBeachId = ref({});
+
+function isBadWeather(weatherCode) {
+  if (typeof weatherCode !== 'number') return false;
+  return weatherCode > 3;
+}
+
+function getWindValue(forecast) {
+  return typeof forecast?.wind10m === 'number' ? forecast.wind10m : 0;
+}
+
+function getTemperatureValue(forecast) {
+  if (typeof forecast?.tmax === 'number') return forecast.tmax;
+  if (typeof forecast?.temp2m === 'number') return forecast.temp2m;
+  if (typeof forecast?.tmin === 'number' && typeof forecast?.tmax === 'number') {
+    return Math.round((forecast.tmin + forecast.tmax) / 2);
+  }
+
+  return 0;
+}
+
+const displayedFavorites = computed(() => {
+  let list = props.favorites.map((favorite) => ({
+    ...favorite,
+    forecast: weatherByBeachId.value[favorite.id] ?? null,
+  }));
+
+  if (hideBadWeather.value) {
+    list = list.filter((favorite) => favorite.forecast && !isBadWeather(favorite.forecast.weather));
+  }
+
+  if (sortMode.value === 'wind-desc') {
+    return [...list].sort((a, b) => getWindValue(b.forecast) - getWindValue(a.forecast));
+  }
+
+  if (sortMode.value === 'temp-desc') {
+    return [...list].sort((a, b) => getTemperatureValue(b.forecast) - getTemperatureValue(a.forecast));
+  }
+
+  return list;
+});
+
+async function refreshWeatherForFavorites() {
+  if (props.favorites.length === 0) {
+    weatherByBeachId.value = {};
+    return;
+  }
+
+  isLoadingWeather.value = true;
+
+  const weatherEntries = await Promise.all(
+    props.favorites.map(async (favorite) => {
+      try {
+        const forecast = await getTodayForecast(favorite.lat, favorite.lon, METEO_TOKEN);
+        return [favorite.id, forecast ?? null];
+      } catch (error) {
+        console.error(error);
+        return [favorite.id, null];
+      }
+    })
+  );
+
+  weatherByBeachId.value = Object.fromEntries(weatherEntries);
+  isLoadingWeather.value = false;
+}
+
+watch(
+  () => props.favorites.map((favorite) => `${favorite.id}-${favorite.lat}-${favorite.lon}`).join('|'),
+  () => {
+    refreshWeatherForFavorites();
+  },
+  { immediate: true }
+);
 </script>
 
 <style scoped>
+.controls-panel {
+  margin-top: 1rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 1rem;
+}
+
+.control-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-weight: 600;
+  color: #365265;
+}
+
+.control-item select {
+  padding: 0.55rem 0.75rem;
+  border-radius: 8px;
+  border: 1px solid #c8d6e2;
+  background: white;
+}
+
+.checkbox-item {
+  flex-direction: row;
+  align-items: center;
+  gap: 0.5rem;
+  background: #f1f7fc;
+  border: 1px solid #d8e6f0;
+  border-radius: 10px;
+  padding: 0.6rem 0.85rem;
+}
+
+.status-row {
+  margin: 1rem 0 0;
+  color: #4a6375;
+  font-style: italic;
+}
+
+.inline-empty {
+  margin-top: 1rem;
+}
+
 .fav-grid { display: grid; gap: 15px; margin-top: 20px; }
 .fav-card {
   background: white; padding: 15px; border-radius: 12px;
@@ -36,7 +197,17 @@ defineEmits(['go-map', 'view-details', 'remove']);
 }
 .fav-info h3 { margin: 0; font-size: 1.1rem; color: #333; }
 .city-name { margin: 5px 0 0; color: #666; font-size: 0.9rem; }
+.weather-line { margin: 6px 0 0; color: #24465f; font-size: 0.9rem; font-weight: 600; }
+.weather-line.muted { color: #8294a1; font-weight: 500; }
 .fav-actions { display: flex; gap: 10px; }
 .btn-details { background: #007bff; color: white; border: none; padding: 8px 15px; border-radius: 6px; cursor: pointer; }
 .btn-remove { background: #fee; border: none; padding: 8px; border-radius: 6px; cursor: pointer; }
+
+@media (max-width: 640px) {
+  .fav-card {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.8rem;
+  }
+}
 </style>
