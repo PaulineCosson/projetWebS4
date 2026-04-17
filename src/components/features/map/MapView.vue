@@ -21,6 +21,10 @@
       />
     </div>
 
+    <p v-if="isRadiusUpdatePending && !isLoading" class="status-row">
+      Mise a jour du rayon...
+    </p>
+
     <div ref="mapContainer" class="map-view"></div>
 
     <p v-if="errorMessage" class="error">{{ errorMessage }}</p>
@@ -28,7 +32,7 @@
 </template>
 
 <script setup>
-import { nextTick, onMounted, ref, watch } from 'vue';
+import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import L from 'leaflet';
 import { getCityCoordinates } from '../../../services/api/geocodingService';
 import { getBeachesAround } from '../../../services/api/beachService';
@@ -58,10 +62,14 @@ const beaches = ref([]);
 const isLoading = ref(false);
 const errorMessage = ref('');
 const searchRadiusKm = ref(readNumberFromStorage(SEARCH_RADIUS_STORAGE_KEY, 30, 5, 80));
+const lastSearchCenter = ref(null);
+const isRadiusUpdatePending = ref(false);
 
 const mapContainer = ref(null);
 let map = null;
 let markersLayer = null;
+let latestRequestId = 0;
+let radiusSearchDebounceTimer = null;
 
 const isFavorite = (beachId) => props.favorites.some((favorite) => favorite.id === beachId);
 
@@ -144,26 +152,60 @@ const updateMap = (lat, lon, beachList) => {
   });
 };
 
-const searchBeaches = async () => {
-  if (!searchQuery.value) return;
+const fetchBeachesFromCenter = async (lat, lon, cityName) => {
+  const requestId = ++latestRequestId;
 
   isLoading.value = true;
   errorMessage.value = '';
 
   try {
-    const { lat, lon } = await getCityCoordinates(searchQuery.value);
     beaches.value = await getBeachesAround(lat, lon, searchRadiusKm.value * 1000);
 
-    emit('search-city-change', searchQuery.value);
+    // Ignore stale responses when multiple searches overlap.
+    if (requestId !== latestRequestId) {
+      return;
+    }
+
+    emit('search-city-change', cityName);
     updateMap(lat, lon, beaches.value);
 
     if (beaches.value.length === 0) {
       errorMessage.value = 'Aucune plage trouvée.';
     }
   } catch (error) {
+    if (requestId !== latestRequestId) {
+      return;
+    }
+
     errorMessage.value = error instanceof Error ? error.message : 'Erreur de recherche.';
   } finally {
-    isLoading.value = false;
+    if (requestId === latestRequestId) {
+      isLoading.value = false;
+    }
+  }
+};
+
+const searchBeaches = async () => {
+  if (!searchQuery.value) return;
+
+  if (radiusSearchDebounceTimer) {
+    clearTimeout(radiusSearchDebounceTimer);
+    radiusSearchDebounceTimer = null;
+  }
+  isRadiusUpdatePending.value = false;
+
+  try {
+    const { lat, lon } = await getCityCoordinates(searchQuery.value);
+
+    lastSearchCenter.value = {
+      lat,
+      lon,
+      cityName: searchQuery.value,
+    };
+
+    await fetchBeachesFromCenter(lat, lon, searchQuery.value);
+  } catch (error) {
+    errorMessage.value = error instanceof Error ? error.message : 'Erreur de recherche.';
   }
 };
 
@@ -173,6 +215,23 @@ onMounted(() => {
 
 watch(searchRadiusKm, (newRadius) => {
   writeStringToStorage(SEARCH_RADIUS_STORAGE_KEY, newRadius);
+
+  if (!lastSearchCenter.value) {
+    return;
+  }
+
+  isRadiusUpdatePending.value = true;
+
+  if (radiusSearchDebounceTimer) {
+    clearTimeout(radiusSearchDebounceTimer);
+  }
+
+  // Debounce to avoid flooding Overpass when the slider is dragged.
+  radiusSearchDebounceTimer = setTimeout(() => {
+    isRadiusUpdatePending.value = false;
+    const { lat, lon, cityName } = lastSearchCenter.value;
+    fetchBeachesFromCenter(lat, lon, cityName);
+  }, 700);
 });
 
 watch(
@@ -187,6 +246,14 @@ watch(
     });
   }
 );
+
+onBeforeUnmount(() => {
+  if (radiusSearchDebounceTimer) {
+    clearTimeout(radiusSearchDebounceTimer);
+  }
+
+  isRadiusUpdatePending.value = false;
+});
 </script>
 
 <style scoped>
@@ -219,6 +286,13 @@ watch(
   color: #b42318;
   font-weight: 700;
   text-align: center;
+}
+
+.status-row {
+  margin: 0 auto 0.75rem;
+  width: min(100%, 34rem);
+  color: #4a6375;
+  font-style: italic;
 }
 
 .map-view {
