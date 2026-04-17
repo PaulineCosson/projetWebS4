@@ -20,7 +20,7 @@
 
         <label class="control-item checkbox-item">
           <input v-model="hideBadWeather" type="checkbox" />
-          Uniquement les plages avec du soleil
+          Uniquement les plages ensoleillées
         </label>
       </div>
 
@@ -74,7 +74,7 @@ const weatherByBeachId = ref({});
 
 function isBadWeather(weatherCode) {
   if (typeof weatherCode !== 'number') return false;
-  return weatherCode > 3;
+  return weatherCode > 2; // Nuageux à partir du code 3
 }
 
 function getWindValue(forecast) {
@@ -167,16 +167,58 @@ watch(
   border-radius: 8px;
   border: 1px solid #c8d6e2;
   background: white;
+  color: #365265;
+  font-weight: 500;
+
 }
 
 .checkbox-item {
   flex-direction: row;
   align-items: center;
-  gap: 0.5rem;
-  background: #f1f7fc;
-  border: 1px solid #d8e6f0;
-  border-radius: 10px;
-  padding: 0.6rem 0.85rem;
+  gap: 0.55rem;
+  background: white;
+  border: 1px solid #c8d6e2;
+  border-radius: 8px;
+  padding: 0.55rem 0.75rem;
+  min-height: 38px;
+  cursor: pointer;
+}
+
+.checkbox-item input[type='checkbox'] {
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  border: 1.5px solid #9ab0c3;
+  border-radius: 5px;
+  background: white;
+  display: grid;
+  place-content: center;
+  transition: border-color 0.2s ease, background-color 0.2s ease;
+}
+
+.checkbox-item input[type='checkbox']::before {
+  content: '';
+  width: 10px;
+  height: 10px;
+  transform: scale(0);
+  transition: transform 0.2s ease;
+  background: white;
+  clip-path: polygon(14% 44%, 0 59%, 44% 100%, 100% 14%, 84% 0, 43% 62%);
+}
+
+.checkbox-item input[type='checkbox']:checked {
+  background: #10324a;
+  border-color: #10324a;
+}
+
+.checkbox-item input[type='checkbox']:checked::before {
+  transform: scale(1);
+}
+
+.checkbox-item input[type='checkbox']:focus-visible {
+  outline: 2px solid #91b9de;
+  outline-offset: 2px;
 }
 
 .status-row {
